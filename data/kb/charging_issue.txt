@@ -1,0 +1,18 @@
+Issue Category: Charging Issue
+
+Common Symptoms:
+- Vehicle not charging
+- Charging interrupted
+- Slow charging
+
+Possible Causes:
+1. Charging cable fault
+2. Charging station fault
+3. Battery management system issue
+4. Charging port damage
+
+Recommended Actions:
+- Inspect charging cable
+- Test another charger
+- Restart charging session
+- Schedule service inspection

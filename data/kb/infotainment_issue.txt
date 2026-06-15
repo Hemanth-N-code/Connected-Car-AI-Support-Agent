@@ -1,0 +1,16 @@
+Issue Category: Infotainment
+
+Common Symptoms:
+- Screen freezing
+- Touch response delay
+- Audio system failure
+
+Possible Causes:
+1. Software crash
+2. Corrupted update
+3. Memory overload
+
+Recommended Actions:
+- Restart infotainment system
+- Install latest software update
+- Perform factory reset if required

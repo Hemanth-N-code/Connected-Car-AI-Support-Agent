@@ -1,0 +1,16 @@
+Issue Category: Navigation Issue
+
+Common Symptoms:
+- GPS not working
+- Navigation route failure
+- Location inaccurate
+
+Possible Causes:
+1. GPS signal blockage
+2. Navigation software issue
+3. Map database outdated
+
+Recommended Actions:
+- Restart navigation system
+- Update maps
+- Move vehicle to open area

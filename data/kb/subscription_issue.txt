@@ -1,0 +1,16 @@
+Issue Category: Subscription
+
+Common Symptoms:
+- Remote start unavailable
+- Vehicle tracking disabled
+- Premium services unavailable
+
+Possible Causes:
+1. Subscription expired
+2. Payment failure
+3. Backend subscription sync delay
+
+Recommended Actions:
+- Renew subscription
+- Verify payment status
+- Refresh account data

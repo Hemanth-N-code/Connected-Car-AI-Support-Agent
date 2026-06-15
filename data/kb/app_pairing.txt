@@ -1,0 +1,18 @@
+Issue Category: App Pairing
+
+Common Symptoms:
+- Vehicle not visible in mobile app
+- Pairing process fails
+- App disconnects after login
+
+Possible Causes:
+1. Expired subscription
+2. Invalid authentication token
+3. Mobile app cache corruption
+4. Vehicle telematics service unavailable
+
+Recommended Actions:
+- Verify subscription status
+- Logout and login again
+- Clear application cache
+- Re-pair vehicle

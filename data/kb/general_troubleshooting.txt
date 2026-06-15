@@ -1,0 +1,12 @@
+General Automotive Support Process
+
+Investigation Order:
+
+1. Identify issue category
+2. Check CRM history
+3. Check telematics data
+4. Verify subscription status
+5. Consult knowledge base
+6. Determine root cause
+7. Generate resolution
+8. Escalate if unresolved

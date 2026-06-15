@@ -1,0 +1,18 @@
+Issue Category: Remote Control Issue
+
+Common Symptoms:
+- Remote unlock failure
+- Remote lock failure
+- Remote start not working
+
+Possible Causes:
+1. Expired connected services subscription
+2. Mobile app authentication failure
+3. Telematics communication failure
+4. Vehicle offline
+
+Recommended Actions:
+- Verify subscription status
+- Re-login to mobile app
+- Check telematics connectivity
+- Restart connected services

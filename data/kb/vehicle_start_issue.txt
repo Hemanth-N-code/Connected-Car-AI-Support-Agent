@@ -1,0 +1,18 @@
+Issue Category: Vehicle Start Issue
+
+Common Symptoms:
+- Vehicle not starting
+- Engine crank failure
+- Push button start failure
+
+Possible Causes:
+1. Battery discharged
+2. Starter motor failure
+3. Immobilizer issue
+4. Key detection failure
+
+Recommended Actions:
+- Check battery voltage
+- Verify key presence
+- Inspect starter system
+- Contact roadside assistance

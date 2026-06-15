@@ -1,0 +1,16 @@
+Issue Category: Connectivity
+
+Common Symptoms:
+- Bluetooth pairing failure
+- Network unavailable
+- Vehicle offline
+
+Possible Causes:
+1. Poor cellular coverage
+2. Connectivity module malfunction
+3. Network outage
+
+Recommended Actions:
+- Verify network signal
+- Restart connectivity module
+- Retry after network recovery

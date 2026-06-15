@@ -1,0 +1,18 @@
+Issue Category: Door Lock Issue
+
+Common Symptoms:
+- Door not unlocking
+- Door lock failure
+- Key fob unlock not working
+
+Possible Causes:
+1. Key fob battery dead
+2. Door lock actuator failure
+3. Vehicle battery low
+4. Remote access module fault
+
+Recommended Actions:
+- Replace key fob battery
+- Check vehicle battery
+- Test manual unlocking
+- Inspect actuator
