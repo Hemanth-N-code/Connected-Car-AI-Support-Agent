@@ -119,3 +119,7 @@ streamlit run app.py
 * PDF Report Generation
 * LangSmith Monitoring
 * Cloud Deployment
+
+## 🎥 Demo Video
+
+[▶️ Watch the Project Demo on YouTube](https://youtu.be/s5Km-zbYOw8)
