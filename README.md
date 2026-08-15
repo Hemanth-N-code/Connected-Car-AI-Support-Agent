@@ -100,7 +100,7 @@ streamlit run app.py
 
 ### App Pairing Issue
 
-[Insert Screenshot]
+![\[Insert Screenshot\]](<doc/image.png>)
 
 ### Door Lock Issue
 
@@ -108,7 +108,7 @@ streamlit run app.py
 
 ### Navigation Issue
 
-[Insert Screenshot]
+![\[Insert Screenshot\]](<doc/Screenshot 2026-08-16 011332.png>)
 
 ---
 
