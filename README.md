@@ -126,12 +126,12 @@ The execution graph is structured as a Directed Acyclic Graph (DAG) state machin
 
 ---
 
-### 3. Satellite Navigation & GPS Offline Routing
-* **Symptom**: Head unit GPS maps fail to load live traffic and routes.
-* **Root Cause Detected**: Expired Live Navigation Telematics Subscription package combined with cached local tile corruption.
-* **Remediation**: Renew remote connected navigation package and trigger OTA map tile cache refresh.
+### 3. Root Cause Isolation & Timeline Trace
+* **Symptom**: Door latch actuator signal timeout recorded on vehicle CAN-Bus.
+* **Root Cause Detected**: Mechanical latch sensor state discrepancy between master driver door and slave passenger relays.
+* **Remediation**: Dispatch field technician inspection or execute controlled latch reset sequence.
 
-![Navigation Case Study](doc/Screenshot%202026-08-16%20011332.png)
+![Door Issue Timeline Trace](doc/door-issue.png)
 
 ---
 
@@ -181,7 +181,8 @@ pip install -r requirements.txt
 ### 4. Configure Environment Variables
 Create a `.env` file in the root directory:
 ```env
-GEMINI_API_KEY="your_actual_gemini_api_key_here"
+GOOGLE_API_KEY="your_actual_gemini_api_key_here"
+# Note: GEMINI_API_KEY is also automatically recognized
 ```
 
 ### 5. Index the Knowledge Base (One-Time Setup)
@@ -206,7 +207,7 @@ The application includes a production-ready `Dockerfile`:
 docker build -t connected-car-agent .
 
 # 2. Run the Container
-docker run -p 7860:7860 -e GEMINI_API_KEY="your_api_key" connected-car-agent
+docker run -p 7860:7860 -e GOOGLE_API_KEY="your_api_key" connected-car-agent
 ```
 Access the application on port `7860`.
 
@@ -225,6 +226,10 @@ Connected-Car-AI-Support-Agent/
 │
 ├── app.py                              # Streamlit Diagnostic UI & Orchestrator
 ├── main.py                             # CLI test invocation script
+├── Final_Project_Report.docx           # Official 50+ page complete project report
+├── Project_Synopsis.md                 # Academic project synopsis
+├── Project_Synopsis.pdf                # Compiled synopsis document
+├── project_documentation.md            # Technical architectural specification
 │
 ├── agents/                             # Specialized Multi-Agent Nodes
 │   ├── crm_agent.py                    # Customer record retrieval
@@ -272,21 +277,15 @@ Connected-Car-AI-Support-Agent/
 │   ├── legacy_support_flowchart.png    # Diagnostic Orchestration Workflow DAG
 │   ├── UI.png                          # Console User Interface preview
 │   ├── Door Lock Issue.png             # Sample Door Lock diagnosis output
-│   ├── image.png                       # Sample App Pairing diagnosis output
-│   └── Screenshot 2026-08-16 011332.png# Sample Navigation diagnosis output
+│   ├── door-issue.png                  # Sample Door Latch diagnosis timeline trace
+│   └── image.png                       # Sample App Pairing diagnosis output
 │
 ├── Demo Video/
 │   └── UI Demo.mp4                     # Demonstration screen recording (78.5 MB)
 │
-├── vector_store/                       # Persistent ChromaDB Vector Index
-│   ├── chroma.sqlite3
-│   └── ee90df1d-2db3-468b-b475-43bd814c38d5/
-│
-└── Project Documentation & Reports/
-    ├── Final_Project_Report.docx       # Official 50+ page complete project report
-    ├── Project_Synopsis.md             # Academic project synopsis
-    ├── Project_Synopsis.pdf            # Compiled synopsis document
-    └── project_documentation.md        # Technical architectural specification
+└── vector_store/                       # Persistent ChromaDB Vector Index
+    ├── chroma.sqlite3
+    └── ee90df1d-2db3-468b-b475-43bd814c38d5/
 ```
 
 ---
