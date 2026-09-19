@@ -113,7 +113,7 @@ The execution graph is structured as a Directed Acyclic Graph (DAG) state machin
 * **Root Cause Detected**: Telematics diagnostic node identifies 12V auxiliary battery State of Charge (SoC) critically depleted (11.4V / < 30%), forcing the telematics control unit (TCU) into deep sleep power-saving mode.
 * **Remediation**: Jump-start / trickle charge 12V battery; manual physical key blade override advised.
 
-![Door Unlocking Issue](doc/door-issue.png)
+![Door Unlocking Issue](doc/door-issue1.png)
 
 ---
 
@@ -122,7 +122,7 @@ The execution graph is structured as a Directed Acyclic Graph (DAG) state machin
 * **Root Cause Detected**: Expired Live Navigation Telematics Subscription package combined with an offline map tile cache synchronization failure.
 * **Remediation**: Renew connected navigation subscription package and trigger OTA map tile cache purge.
 
-![Navigation Issue](doc/navigation-issue.png)
+![Navigation Issue](doc/navigation-issue1.png)
 
 ---
 
@@ -130,7 +130,7 @@ The execution graph is structured as a Directed Acyclic Graph (DAG) state machin
 * **Scenario**: Low diagnostic confidence (< 70%), unknown fault classification, or safety-critical Over-The-Air (OTA) actuation request.
 * **Governance Gate**: In accordance with ISO 26262 functional safety, automated vehicle actuation is halted and the ticket is escalated to a certified operator workbench for manual override, technician notes, or physical workshop dispatch.
 
-![Escalation (Technician in the Loop)](doc/escalation.png)
+![Escalation (Technician in the Loop)](doc/escalation-issue1.png)
 
 ---
 
