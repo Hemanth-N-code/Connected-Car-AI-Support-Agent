@@ -1,9 +1,10 @@
 import streamlit as st
 import time
 from graph.workflow import build_graph
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 import json
+import os
 
 # Compile LangGraph
 graph = build_graph()
@@ -429,6 +430,8 @@ if "technician_action" not in st.session_state:
     st.session_state.technician_action = None
 if "technician_override_notes" not in st.session_state:
     st.session_state.technician_override_notes = ""
+if "api_error_info" not in st.session_state:
+    st.session_state.api_error_info = None
 
 # Sidebar: Vehicle Console Controller
 with st.sidebar:
@@ -541,19 +544,125 @@ with tabs[0]:
         else:
             with st.spinner("Initiating LangGraph diagnostic coordinator & polling automotive sub-agents..."):
                 start_time = time.time()
-                result = graph.invoke({
-                    "customer_query": st.session_state.customer_query_input,
-                    "customer_id": st.session_state.customer_id_input,
-                    "vehicle_id": st.session_state.vehicle_id_input
-                })
-                end_time = time.time()
-                
-                st.session_state.investigation_result = result
-                st.session_state.execution_time = round(end_time - start_time, 2)
-                st.session_state.last_run_timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-                st.session_state.technician_action = None
-                st.session_state.technician_override_notes = ""
-                st.rerun()
+                try:
+                    result = graph.invoke({
+                        "customer_query": st.session_state.customer_query_input,
+                        "customer_id": st.session_state.customer_id_input,
+                        "vehicle_id": st.session_state.vehicle_id_input
+                    })
+                    end_time = time.time()
+                    
+                    st.session_state.investigation_result = result
+                    st.session_state.execution_time = round(end_time - start_time, 2)
+                    st.session_state.last_run_timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                    st.session_state.technician_action = None
+                    st.session_state.technician_override_notes = ""
+                    st.session_state.api_error_info = None
+                    st.rerun()
+                except Exception as e:
+                    end_time = time.time()
+                    err_msg = str(e)
+                    st.session_state.api_error_info = {
+                        "raw_error": err_msg,
+                        "occurred_at": datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                    }
+                    st.session_state.investigation_result = None
+
+    # Display API Quota / Rate Limit Notice if caught
+    if st.session_state.get("api_error_info"):
+        err_info = st.session_state["api_error_info"]
+        raw_error = err_info.get("raw_error", "")
+        
+        is_503 = "503" in raw_error or "UNAVAILABLE" in raw_error or "high demand" in raw_error.lower()
+        is_429 = "429" in raw_error or "RESOURCE_EXHAUSTED" in raw_error or "quota" in raw_error.lower() or "limit" in raw_error.lower()
+        
+        # Calculate daily quota reset time (Google Gemini quotas reset at 00:00 PST / 08:00 UTC, which is ~13:30 IST)
+        now_utc = datetime.now(timezone.utc)
+        target_today = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+        if now_utc >= target_today:
+            target_reset = target_today + timedelta(days=1)
+        else:
+            target_reset = target_today
+            
+        time_rem = target_reset - now_utc
+        hrs_rem = int(time_rem.total_seconds() // 3600)
+        mins_rem = int((time_rem.total_seconds() % 3600) // 60)
+        reset_time_ist = target_reset.astimezone().strftime('%I:%M %p IST (%d %b %Y)')
+        
+        st.divider()
+        if is_503:
+            st.markdown(f"""
+            <div style="background: rgba(239, 68, 68, 0.08); border: 1.5px solid #ef4444; border-radius: 12px; padding: 22px; margin-bottom: 25px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em;">
+                        ⚡ 503 UNAVAILABLE • HIGH SERVER DEMAND
+                    </span>
+                    <span style="color: #94a3b8; font-size: 12px;">Logged: {err_info.get('occurred_at', '')}</span>
+                </div>
+                <h3 style="color: #ffffff; margin: 0 0 10px 0; font-size: 20px; font-weight: 700;">
+                    Gemini 2.5 Flash Temporary Capacity Limit Reached
+                </h3>
+                <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 14px;">
+                    Google's Gemini 2.5 Flash servers are currently experiencing peak traffic volume. This is a temporary surge on the free API tier.
+                </p>
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+                    <div style="color: #38bdf8; font-weight: 700; font-size: 13px; margin-bottom: 4px;">🕒 Availability Timing:</div>
+                    <div style="color: #f1f5f9; font-size: 13px;">
+                        Expected recovery in <strong>2 to 5 minutes</strong>. Spikes in demand are temporary. Please wait a moment and click <strong>Run Diagnostics</strong> again.
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background: rgba(245, 158, 11, 0.08); border: 1.5px solid #f59e0b; border-radius: 12px; padding: 22px; margin-bottom: 25px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em;">
+                        ⏳ GEMINI-2.5 DAY LIMIT EXCEEDED • 429 QUOTA
+                    </span>
+                    <span style="color: #94a3b8; font-size: 12px;">Logged: {err_info.get('occurred_at', '')}</span>
+                </div>
+                <h3 style="color: #ffffff; margin: 0 0 10px 0; font-size: 20px; font-weight: 700;">
+                    Gemini 2.5 Flash Daily API Limit Exceeded
+                </h3>
+                <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 14px;">
+                    The daily request quota for your current Google Gemini API key has been exhausted for the day.
+                </p>
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+                    <div style="color: #34d399; font-weight: 700; font-size: 13px; margin-bottom: 4px;">⏰ Next Quota Reset Schedule:</div>
+                    <div style="color: #f1f5f9; font-size: 13px;">
+                        Google Gemini quotas refresh daily at <strong>00:00 Pacific Time</strong> (approx. <strong>{reset_time_ist}</strong> / 08:00 UTC).<br>
+                        <strong>Estimated time until available:</strong> ~{hrs_rem} hours and {mins_rem} minutes.
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with st.expander("🔑 Provide Alternate Gemini API Key (Immediate Resume)", expanded=False):
+            col_k1, col_k2 = st.columns([3, 1])
+            with col_k1:
+                new_key_input = st.text_input("New Google Gemini API Key", type="password", placeholder="AIzaSy...", key="alternate_key_field")
+            with col_k2:
+                st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+                if st.button("Apply & Run", use_container_width=True):
+                    if new_key_input.strip():
+                        os.environ["GOOGLE_API_KEY"] = new_key_input.strip()
+                        os.environ["GEMINI_API_KEY"] = new_key_input.strip()
+                        from utils import llm as llm_module
+                        from langchain_google_genai import ChatGoogleGenerativeAI
+                        llm_module.llm = ChatGoogleGenerativeAI(
+                            model="gemini-2.5-flash",
+                            temperature=0,
+                            google_api_key=new_key_input.strip()
+                        )
+                        st.session_state.api_error_info = None
+                        st.session_state.trigger_run = True
+                        st.rerun()
+                    else:
+                        st.error("Please provide a valid API key string.")
+        
+        with st.expander("🔍 View Raw Error Details (Developer Trace)", expanded=False):
+            st.code(raw_error, language="text")
 
     # Display diagnostics report if loaded
     if st.session_state.investigation_result:

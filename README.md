@@ -36,7 +36,7 @@ The **Connected Car AI Support Agent** is a stateful, autonomous multi-agent dia
 
 The platform features a modern, glassmorphic dark-themed diagnostic console built in Streamlit:
 
-![Diagnostic Console UI](doc/UI.png)
+![UI](doc/UI.png)
 
 ---
 
@@ -44,13 +44,13 @@ The platform features a modern, glassmorphic dark-themed diagnostic console buil
 
 The system operates on a **5-Pillar Architecture** that unifies natural language complaints, agentic graph orchestration, external IoT/DB layers, semantic RAG retrieval, and certified technician governance:
 
-![System Architecture](doc/architecture.png)
+![Architecture](doc/architecture.png)
 
-### End-to-End Diagnostic Workflow (DAG)
+### Customer Support Workflow Flowchart (DAG)
 
 The execution graph is structured as a Directed Acyclic Graph (DAG) state machine managed by LangGraph:
 
-![Diagnostic Workflow Flowchart](doc/legacy_support_flowchart.png)
+![Legacy Customer Support Flow](doc/legacy_support_flowchart.png)
 
 ```
                        ┌───────────────────────────────┐
@@ -106,32 +106,31 @@ The execution graph is structured as a Directed Acyclic Graph (DAG) state machin
 
 ---
 
-## 🔍 Diagnostic Case Studies & Sample Outputs
+## 🔍 Diagnostic Case Studies & Output Traces
 
-### 1. Remote Door Lock Actuation Failure
-* **Symptom**: User complains mobile app cannot unlock vehicle doors.
-* **Root Cause Detected**: Telematics shows 12V auxiliary battery SoC critically low (11.4V / < 30%), triggering power-saving TCU deep sleep and blocking remote actuation.
-* **Remediation**: Jump-start/trickle charge 12V battery; manual physical key blade entry advised.
+### 1. Door Unlocking Issue
+* **Symptom**: User complains that the companion mobile app fails to unlock the vehicle doors.
+* **Root Cause Detected**: Telematics diagnostic node identifies 12V auxiliary battery State of Charge (SoC) critically depleted (11.4V / < 30%), forcing the telematics control unit (TCU) into deep sleep power-saving mode.
+* **Remediation**: Jump-start / trickle charge 12V battery; manual physical key blade override advised.
 
-![Door Lock Case Study](doc/Door%20Lock%20Issue.png)
-
----
-
-### 2. App Pairing & Connectivity Drop
-* **Symptom**: Companion smartphone app unlinks and disconnects after authentication.
-* **Root Cause Detected**: Stale Bluetooth Low Energy (BLE) pairing token and eSIM TCU cellular packet loss.
-* **Remediation**: Reset network profile in vehicle head unit and clear local mobile cache.
-
-![App Pairing Case Study](doc/image.png)
+![Door Unlocking Issue](doc/door-issue.png)
 
 ---
 
-### 3. Root Cause Isolation & Timeline Trace
-* **Symptom**: Door latch actuator signal timeout recorded on vehicle CAN-Bus.
-* **Root Cause Detected**: Mechanical latch sensor state discrepancy between master driver door and slave passenger relays.
-* **Remediation**: Dispatch field technician inspection or execute controlled latch reset sequence.
+### 2. Navigation Issue
+* **Symptom**: In-vehicle head unit GPS navigation fails to download live traffic or compute route destinations.
+* **Root Cause Detected**: Expired Live Navigation Telematics Subscription package combined with an offline map tile cache synchronization failure.
+* **Remediation**: Renew connected navigation subscription package and trigger OTA map tile cache purge.
 
-![Door Issue Timeline Trace](doc/door-issue.png)
+![Navigation Issue](doc/navigation-issue.png)
+
+---
+
+### 3. Escalation (Technician-in-the-Loop)
+* **Scenario**: Low diagnostic confidence (< 70%), unknown fault classification, or safety-critical Over-The-Air (OTA) actuation request.
+* **Governance Gate**: In accordance with ISO 26262 functional safety, automated vehicle actuation is halted and the ticket is escalated to a certified operator workbench for manual override, technician notes, or physical workshop dispatch.
+
+![Escalation (Technician in the Loop)](doc/escalation.png)
 
 ---
 
@@ -140,7 +139,7 @@ The execution graph is structured as a Directed Acyclic Graph (DAG) state machin
 | Layer | Component | Description |
 | :--- | :--- | :--- |
 | **Orchestration** | [LangGraph](https://github.com/langchain-ai/langgraph) | Stateful multi-agent graph DAG state-machine |
-| **LLM Core** | [Google Gemini 2.5 Flash](https://ai.google.dev/) | High-speed, structured JSON reasoning engine |
+| **LLM Core** | [Google Gemini 2.5 Flash](https://ai.google.dev/) | High-speed, structured JSON reasoning engine with rate-limit handling |
 | **Frontend UI** | [Streamlit](https://streamlit.io/) | Dark-themed glassmorphic interactive diagnostic console |
 | **Vector Database** | [ChromaDB](https://www.trychroma.com/) | Persistent vector store for RAG automotive manuals |
 | **Embeddings** | Sentence-Transformers | Dense semantic embedding representations |
@@ -273,12 +272,12 @@ Connected-Car-AI-Support-Agent/
 │       └── vehicle_start_issue.txt
 │
 ├── doc/                                # Architecture & Screenshot Assets
-│   ├── architecture.png                # 5-Pillar Architecture Diagram
-│   ├── legacy_support_flowchart.png    # Diagnostic Orchestration Workflow DAG
 │   ├── UI.png                          # Console User Interface preview
-│   ├── Door Lock Issue.png             # Sample Door Lock diagnosis output
-│   ├── door-issue.png                  # Sample Door Latch diagnosis timeline trace
-│   └── image.png                       # Sample App Pairing diagnosis output
+│   ├── architecture.png                # 5-Pillar Architecture Diagram
+│   ├── legacy_support_flowchart.png    # Customer Support Workflow Flowchart
+│   ├── door-issue.png                  # Door Unlocking Issue diagnosis trace
+│   ├── navigation-issue.png            # Navigation Issue diagnosis trace
+│   └── escalation.png                  # Technician-in-the-Loop Escalation Workbench (to be uploaded)
 │
 ├── Demo Video/
 │   └── UI Demo.mp4                     # Demonstration screen recording (78.5 MB)
