@@ -321,8 +321,8 @@ def draw_escalation_card(is_escalated, reason):
         color = "#10B981"
         bg = "rgba(16, 185, 129, 0.04)"
         border = "rgba(16, 185, 129, 0.15)"
-        title = "⚡ Autonomous Action Active"
-        desc = "Confidence is high. System dispatcher cleared for OTA remediation. No manual action required."
+        title = "⚡ Autonomous Action Pre-Cleared"
+        desc = "Diagnostic confidence is high (≥ 70%). System cleared for Over-The-Air (OTA) remediation. Certified technician authorization available below."
         
     html = f"""
     <div style="
@@ -404,6 +404,11 @@ PRESETS = {
         "query": "The screen inside the car says navigation network connection failed",
         "customer_id": "C001",
         "vehicle_id": "V001"
+    },
+    "🛡️ Preset 5: Unknown Anomaly (Escalation)": {
+        "query": "Strange intermittent clicking sound under the passenger seat during acceleration on gravel roads",
+        "customer_id": "C001",
+        "vehicle_id": "V001"
     }
 }
 
@@ -420,6 +425,10 @@ if "customer_id_input" not in st.session_state:
     st.session_state.customer_id_input = "C001"
 if "vehicle_id_input" not in st.session_state:
     st.session_state.vehicle_id_input = "V001"
+if "technician_action" not in st.session_state:
+    st.session_state.technician_action = None
+if "technician_override_notes" not in st.session_state:
+    st.session_state.technician_override_notes = ""
 
 # Sidebar: Vehicle Console Controller
 with st.sidebar:
@@ -438,11 +447,20 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
-    st.markdown("<h4>📡 NODE INSTANCE</h4>", unsafe_allow_html=True)
-    st.success("API Router: Connected")
-    st.info("Core Engine: v2.0-Enterprise")
-    st.divider()
-    st.code(f"active_case: {st.session_state.customer_id_input}\ntarget_node: {st.session_state.vehicle_id_input}\nsync_status: healthy", language="yaml")
+    st.markdown("""
+    <div style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; margin-top: 15px;">
+        <div style="font-size: 11px; font-weight: 700; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">📡 Edge Telematics Node</div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #E2E8F0; margin-bottom: 4px;">
+            <span>Router Engine:</span> <span style="color: #34d399; font-weight: 600;">Connected</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #E2E8F0; margin-bottom: 4px;">
+            <span>Active Case:</span> <span style="color: #c7d2fe; font-weight: 600;">{cid}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #E2E8F0;">
+            <span>Target VIN:</span> <span style="color: #c7d2fe; font-weight: 600;">{vid}</span>
+        </div>
+    </div>
+    """.format(cid=st.session_state.customer_id_input, vid=st.session_state.vehicle_id_input), unsafe_allow_html=True)
 
 # Header section
 st.markdown("""
@@ -533,6 +551,8 @@ with tabs[0]:
                 st.session_state.investigation_result = result
                 st.session_state.execution_time = round(end_time - start_time, 2)
                 st.session_state.last_run_timestamp = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                st.session_state.technician_action = None
+                st.session_state.technician_override_notes = ""
                 st.rerun()
 
     # Display diagnostics report if loaded
@@ -571,267 +591,455 @@ with tabs[0]:
         st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
         st.progress(confidence)
         
-        # Split layout details
-        out_col1, out_col2 = st.columns([3, 2])
+        # -------------------------------------------------------------------------
+        # Precompute Workflow Flowchart HTML & Escalation Flag
+        # -------------------------------------------------------------------------
+        planner_decision = res.get("planner_decision", {})
+        investigation_steps = res.get("investigation_steps", [])
         
-        with out_col1:
-            # Workflow Visualization Section
-            st.markdown("<h3>🛣️ Diagnostic Workflow Flowchart</h3>", unsafe_allow_html=True)
-            
-            planner_decision = res.get("planner_decision", {})
-            investigation_steps = res.get("investigation_steps", [])
-            
-            crm_executed = planner_decision.get("crm", False) or any("CRM" in s for s in investigation_steps)
-            tele_executed = planner_decision.get("telematics", False) or any("Telematics Agent retrieved" in s or "Telematics" in s for s in investigation_steps)
-            sub_executed = planner_decision.get("subscription", False) or any("Subscription status" in s or "Subscription" in s for s in investigation_steps)
-            
-            green_bg = "rgba(16, 185, 129, 0.08)"
-            green_border = "#10b981"
-            green_shadow = "0 0 10px rgba(16, 185, 129, 0.2)"
-            green_text = "#34d399"
-            
-            gray_bg = "rgba(107, 114, 128, 0.05)"
-            gray_border = "#4b5563"
-            gray_shadow = "none"
-            gray_text = "#9ca3af"
+        crm_executed = planner_decision.get("crm", False) or any("CRM" in s for s in investigation_steps)
+        tele_executed = planner_decision.get("telematics", False) or any("Telematics Agent retrieved" in s or "Telematics" in s for s in investigation_steps)
+        sub_executed = planner_decision.get("subscription", False) or any("Subscription status" in s or "Subscription" in s for s in investigation_steps)
+        
+        green_bg = "rgba(16, 185, 129, 0.08)"
+        green_border = "#10b981"
+        green_shadow = "0 0 10px rgba(16, 185, 129, 0.2)"
+        green_text = "#34d399"
+        
+        gray_bg = "rgba(107, 114, 128, 0.05)"
+        gray_border = "#4b5563"
+        gray_shadow = "none"
+        gray_text = "#9ca3af"
 
-            # CRM
-            if crm_executed:
-                crm_bg, crm_border_style, crm_shadow_style, crm_color = green_bg, green_border, green_shadow, green_text
-                crm_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
-                crm_desc = f"Profile: {res.get('crm_data', {}).get('name', 'N/A')}"
-            else:
-                crm_bg, crm_border_style, crm_shadow_style, crm_color = gray_bg, gray_border, gray_shadow, gray_text
-                crm_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
-                crm_desc = "Skipped by Planner Decision"
-                
-            # Telematics
-            if tele_executed:
-                tele_bg, tele_border_style, tele_shadow_style, tele_color = green_bg, green_border, green_shadow, green_text
-                tele_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
-                tele_desc = f"ECU Charge: {res.get('telematics_data', {}).get('battery', 'N/A')}%"
-                
-                tele_skip_bg, tele_skip_border_style, tele_skip_shadow_style, tele_skip_color = gray_bg, gray_border, gray_shadow, gray_text
-                tele_skip_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
-                tele_skip_desc = "Path Not Taken"
-            else:
-                tele_bg, tele_border_style, tele_shadow_style, tele_color = gray_bg, gray_border, gray_shadow, gray_text
-                tele_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
-                tele_desc = "Skipped by Planner Decision"
-                
-                tele_skip_bg, tele_skip_border_style, tele_skip_shadow_style, tele_skip_color = green_bg, green_border, green_shadow, green_text
-                tele_skip_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
-                tele_skip_desc = "Bypassed ECU Polling"
-                
-            # Subscription
-            if sub_executed:
-                sub_bg, sub_border_style, sub_shadow_style, sub_color = green_bg, green_border, green_shadow, green_text
-                sub_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
-                sub_desc = f"Status: {res.get('subscription_status', 'N/A').upper()}"
-                
-                sub_skip_bg, sub_skip_border_style, sub_skip_shadow_style, sub_skip_color = gray_bg, gray_border, gray_shadow, gray_text
-                sub_skip_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
-                sub_skip_desc = "Path Not Taken"
-            else:
-                sub_bg, sub_border_style, sub_shadow_style, sub_color = gray_bg, gray_border, gray_shadow, gray_text
-                sub_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
-                sub_desc = "Skipped by Planner Decision"
-                
-                sub_skip_bg, sub_skip_border_style, sub_skip_shadow_style, sub_skip_color = green_bg, green_border, green_shadow, green_text
-                sub_skip_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
-                sub_skip_desc = "Bypassed Subs Polling"
-                
-            # Escalation Check
-            confidence_val = float(res.get("root_cause_confidence", 0.0))
-            escalated = confidence_val < 0.70 or res.get("issue_category") == "unknown"
-            if escalated:
-                esc_title_color = "#ef4444"
-                esc_border = "#ef4444"
-                esc_bg = "rgba(239, 68, 68, 0.08)"
-                esc_shadow = "0 0 10px rgba(239, 68, 68, 0.15)"
-                esc_text = "Escalated: Low Confidence or Unknown Category"
-                final_rec_text = "Escalated Support Dispatch"
-            else:
-                esc_title_color = "#10b981"
-                esc_border = "#10b981"
-                esc_bg = "rgba(16, 185, 129, 0.08)"
-                esc_shadow = "0 0 10px rgba(16, 185, 129, 0.15)"
-                esc_text = "Autonomous OTA Remediation Cleared"
-                final_rec_text = "Autonomous OTA Remediation Dispatch"
-                
-            complaint_text = res.get("customer_query", "")
-            if len(complaint_text) > 42:
-                complaint_text = complaint_text[:39] + "..."
-                
-            rc_text = res.get("root_cause", "Undetermined")
-            if len(rc_text) > 42:
-                rc_text = rc_text[:39] + "..."
-                
-            res_text = res.get("resolution", "No solution mapped")
-            if len(res_text) > 42:
-                res_text = res_text[:39] + "..."
+        # CRM
+        if crm_executed:
+            crm_bg, crm_border_style, crm_shadow_style, crm_color = green_bg, green_border, green_shadow, green_text
+            crm_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
+            crm_desc = f"Profile: {res.get('crm_data', {}).get('name', 'N/A')}"
+        else:
+            crm_bg, crm_border_style, crm_shadow_style, crm_color = gray_bg, gray_border, gray_shadow, gray_text
+            crm_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
+            crm_desc = "Skipped by Planner Decision"
+            
+        # Telematics
+        if tele_executed:
+            tele_bg, tele_border_style, tele_shadow_style, tele_color = green_bg, green_border, green_shadow, green_text
+            tele_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
+            tele_desc = f"ECU Charge: {res.get('telematics_data', {}).get('battery', 'N/A')}%"
+            
+            tele_skip_bg, tele_skip_border_style, tele_skip_shadow_style, tele_skip_color = gray_bg, gray_border, gray_shadow, gray_text
+            tele_skip_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
+            tele_skip_desc = "Path Not Taken"
+        else:
+            tele_bg, tele_border_style, tele_shadow_style, tele_color = gray_bg, gray_border, gray_shadow, gray_text
+            tele_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
+            tele_desc = "Skipped by Planner Decision"
+            
+            tele_skip_bg, tele_skip_border_style, tele_skip_shadow_style, tele_skip_color = green_bg, green_border, green_shadow, green_text
+            tele_skip_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
+            tele_skip_desc = "Bypassed ECU Polling"
+            
+        # Subscription
+        if sub_executed:
+            sub_bg, sub_border_style, sub_shadow_style, sub_color = green_bg, green_border, green_shadow, green_text
+            sub_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
+            sub_desc = f"Status: {res.get('subscription_status', 'N/A').upper()}"
+            
+            sub_skip_bg, sub_skip_border_style, sub_skip_shadow_style, sub_skip_color = gray_bg, gray_border, gray_shadow, gray_text
+            sub_skip_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
+            sub_skip_desc = "Path Not Taken"
+        else:
+            sub_bg, sub_border_style, sub_shadow_style, sub_color = gray_bg, gray_border, gray_shadow, gray_text
+            sub_badge = '<span style="color:#6b7280;font-weight:700;font-size:9px;">[SKIPPED]</span>'
+            sub_desc = "Skipped by Planner Decision"
+            
+            sub_skip_bg, sub_skip_border_style, sub_skip_shadow_style, sub_skip_color = green_bg, green_border, green_shadow, green_text
+            sub_skip_badge = '<span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>'
+            sub_skip_desc = "Bypassed Subs Polling"
+            
+        # Escalation Check
+        confidence_val = float(res.get("root_cause_confidence", 0.0))
+        escalated = confidence_val < 0.70 or res.get("issue_category") == "unknown"
+        if escalated:
+            esc_title_color = "#ef4444"
+            esc_border = "#ef4444"
+            esc_bg = "rgba(239, 68, 68, 0.08)"
+            esc_shadow = "0 0 10px rgba(239, 68, 68, 0.15)"
+            esc_text = "Escalated: Low Confidence or Unknown Category"
+            final_rec_text = "Escalated Support Dispatch"
+        else:
+            esc_title_color = "#10b981"
+            esc_border = "#10b981"
+            esc_bg = "rgba(16, 185, 129, 0.08)"
+            esc_shadow = "0 0 10px rgba(16, 185, 129, 0.15)"
+            esc_text = "Autonomous OTA Remediation Cleared"
+            final_rec_text = "Autonomous OTA Remediation Dispatch"
+            
+        complaint_text = res.get("customer_query", "")
+        if len(complaint_text) > 42:
+            complaint_text = complaint_text[:39] + "..."
+            
+        rc_text = res.get("root_cause", "Undetermined")
+        if len(rc_text) > 42:
+            rc_text = rc_text[:39] + "..."
+            
+        res_text = res.get("resolution", "No solution mapped")
+        if len(res_text) > 42:
+            res_text = res_text[:39] + "..."
 
-            flow_html = f"""
-            <div style="display: flex; flex-direction: column; align-items: center; width: 100%; gap: 6px; padding: 20px; background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25);">
-                
-                <!-- Card 1: Customer Complaint -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>💬 Customer Complaint</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-top: 3px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">"{complaint_text}"</div>
+        flow_html = f"""
+        <div style="display: flex; flex-direction: column; align-items: center; width: 100%; gap: 6px; padding: 20px; background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25);">
+            
+            <!-- Card 1: Customer Complaint -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>💬 Customer Complaint</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 2: Intent + Planner Agent -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>🎯 Intent + Planner Agent</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #e2e8f0; margin-top: 3px; font-weight: 500;">
-                        Classified: <span style="color: #818cf8; font-weight: 700;">{res.get('issue_category', 'unknown').upper()}</span>
-                    </div>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 3px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">"{complaint_text}"</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 2: Intent + Planner Agent -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🎯 Intent + Planner Agent</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 3: CRM Agent -->
-                <div style="width: 290px; background: {crm_bg}; border: 1.5px solid {crm_border_style}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {crm_shadow_style};">
-                    <div style="font-size: 11px; color: {crm_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>👤 CRM Agent</span>
-                        {crm_badge}
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{crm_desc}</div>
+                <div style="font-size: 11px; color: #e2e8f0; margin-top: 3px; font-weight: 500;">
+                    Classified: <span style="color: #818cf8; font-weight: 700;">{res.get('issue_category', 'unknown').upper()}</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 4: Decision: Telematics Branch -->
-                <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
-                    <div style="font-size: 9px; color: #818cf8; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 2px;">Decision: Telematics?</div>
-                    <div style="display: flex; gap: 12px; justify-content: center; align-items: stretch; width: 100%;">
-                        <!-- Telematics Agent Card -->
-                        <div style="width: 145px; background: {tele_bg}; border: 1.5px solid {tele_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {tele_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
-                            <div style="font-size: 10px; color: {tele_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
-                                <span>📡 Telematics</span>
-                                {tele_badge}
-                            </div>
-                            <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{tele_desc}</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 3: CRM Agent -->
+            <div style="width: 290px; background: {crm_bg}; border: 1.5px solid {crm_border_style}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {crm_shadow_style};">
+                <div style="font-size: 11px; color: {crm_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>👤 CRM Agent</span>
+                    {crm_badge}
+                </div>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{crm_desc}</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 4: Decision: Telematics Branch -->
+            <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                <div style="font-size: 9px; color: #818cf8; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 2px;">Decision: Telematics?</div>
+                <div style="display: flex; gap: 12px; justify-content: center; align-items: stretch; width: 100%;">
+                    <!-- Telematics Agent Card -->
+                    <div style="width: 145px; background: {tele_bg}; border: 1.5px solid {tele_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {tele_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div style="font-size: 10px; color: {tele_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
+                            <span>📡 Telematics</span>
+                            {tele_badge}
                         </div>
-                        <!-- Skip Card -->
-                        <div style="width: 135px; background: {tele_skip_bg}; border: 1.5px solid {tele_skip_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {tele_skip_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
-                            <div style="font-size: 10px; color: {tele_skip_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
-                                <span>⏭️ Skip</span>
-                                {tele_skip_badge}
-                            </div>
-                            <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{tele_skip_desc}</div>
+                        <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{tele_desc}</div>
+                    </div>
+                    <!-- Skip Card -->
+                    <div style="width: 135px; background: {tele_skip_bg}; border: 1.5px solid {tele_skip_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {tele_skip_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div style="font-size: 10px; color: {tele_skip_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
+                            <span>⏭️ Skip</span>
+                            {tele_skip_badge}
                         </div>
+                        <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{tele_skip_desc}</div>
                     </div>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: 2px 0 -2px 0;">↓</div>
-                
-                <!-- Card 5: Decision: Subscription Branch -->
-                <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
-                    <div style="font-size: 9px; color: #818cf8; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 2px;">Decision: Subscription?</div>
-                    <div style="display: flex; gap: 12px; justify-content: center; align-items: stretch; width: 100%;">
-                        <!-- Subscription Agent Card -->
-                        <div style="width: 145px; background: {sub_bg}; border: 1.5px solid {sub_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {sub_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
-                            <div style="font-size: 10px; color: {sub_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
-                                <span>💳 Subscription</span>
-                                {sub_badge}
-                            </div>
-                            <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{sub_desc}</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: 2px 0 -2px 0;">↓</div>
+            
+            <!-- Card 5: Decision: Subscription Branch -->
+            <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                <div style="font-size: 9px; color: #818cf8; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 2px;">Decision: Subscription?</div>
+                <div style="display: flex; gap: 12px; justify-content: center; align-items: stretch; width: 100%;">
+                    <!-- Subscription Agent Card -->
+                    <div style="width: 145px; background: {sub_bg}; border: 1.5px solid {sub_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {sub_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div style="font-size: 10px; color: {sub_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
+                            <span>💳 Subscription</span>
+                            {sub_badge}
                         </div>
-                        <!-- Skip Card -->
-                        <div style="width: 135px; background: {sub_skip_bg}; border: 1.5px solid {sub_skip_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {sub_skip_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
-                            <div style="font-size: 10px; color: {sub_skip_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
-                                <span>⏭️ Skip</span>
-                                {sub_skip_badge}
-                            </div>
-                            <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{sub_skip_desc}</div>
+                        <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{sub_desc}</div>
+                    </div>
+                    <!-- Skip Card -->
+                    <div style="width: 135px; background: {sub_skip_bg}; border: 1.5px solid {sub_skip_border_style}; border-radius: 8px; padding: 6px; text-align: center; color: white; box-shadow: {sub_skip_shadow_style}; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div style="font-size: 10px; color: {sub_skip_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; display: flex; justify-content: space-between; align-items: center;">
+                            <span>⏭️ Skip</span>
+                            {sub_skip_badge}
                         </div>
+                        <div style="font-size: 9px; color: #9ca3af; margin-top: 2px; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{sub_skip_desc}</div>
                     </div>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: 2px 0 -2px 0;">↓</div>
-                
-                <!-- Card 6: Knowledge Base (RAG Agent) -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>📚 Knowledge Base (RAG)</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-top: 3px;">Retrieved technical manuals and bulletins</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: 2px 0 -2px 0;">↓</div>
+            
+            <!-- Card 6: Knowledge Base (RAG Agent) -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>📚 Knowledge Base (RAG)</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 7: Investigation Agent -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>🔍 Investigation Agent</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-top: 3px;">Synthesized evidence logs and telemetry</div>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 3px;">Retrieved technical manuals and bulletins</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 7: Investigation Agent -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🔍 Investigation Agent</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 8: Root Cause Analysis -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>🧠 Root Cause Analysis</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #e2e8f0; margin-top: 3px; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{rc_text}</div>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 3px;">Synthesized evidence logs and telemetry</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 8: Root Cause Analysis -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🧠 Root Cause Analysis</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 9: Resolution Generation -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>🔧 Resolution Generation</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #e2e8f0; margin-top: 3px; font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{res_text}</div>
+                <div style="font-size: 11px; color: #e2e8f0; margin-top: 3px; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{rc_text}</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 9: Resolution Generation -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🔧 Resolution Generation</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 10: Escalation Check -->
-                <div style="width: 290px; background: {esc_bg}; border: 1.5px solid {esc_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {esc_shadow};">
-                    <div style="font-size: 11px; color: {esc_title_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>🛡️ Escalation Check</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-top: 3px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{esc_text}</div>
+                <div style="font-size: 11px; color: #e2e8f0; margin-top: 3px; font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{res_text}</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 10: Escalation Check -->
+            <div style="width: 290px; background: {esc_bg}; border: 1.5px solid {esc_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {esc_shadow};">
+                <div style="font-size: 11px; color: {esc_title_color}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🛡️ Escalation Check</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
-                <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
-                
-                <!-- Card 11: Final Support Recommendation -->
-                <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
-                    <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>📋 Final Recommendation</span>
-                        <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
-                    </div>
-                    <div style="font-size: 11px; color: #818cf8; margin-top: 3px; font-weight: 700; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{final_rec_text}</div>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 3px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{esc_text}</div>
+            </div>
+            
+            <div style="color: {green_border}; font-size: 14px; font-weight: bold; margin: -2px 0;">↓</div>
+            
+            <!-- Card 11: Final Support Recommendation -->
+            <div style="width: 290px; background: {green_bg}; border: 1.5px solid {green_border}; border-radius: 8px; padding: 8px; text-align: center; color: white; box-shadow: {green_shadow};">
+                <div style="font-size: 11px; color: {green_text}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
+                    <span>📋 Final Recommendation</span>
+                    <span style="color:#10b981;font-weight:700;font-size:9px;">[EXECUTED]</span>
                 </div>
-                
+                <div style="font-size: 11px; color: #818cf8; margin-top: 3px; font-weight: 700; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{final_rec_text}</div>
+            </div>
+            
+        </div>
+        """
+
+        # -------------------------------------------------------------------------
+        # SECTION 1: PRIMARY DIAGNOSTIC VERDICT (Instant Findings Front & Center!)
+        # -------------------------------------------------------------------------
+        st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+        rc_col, res_col = st.columns(2)
+        with rc_col:
+            st.markdown(draw_root_cause_card(res.get("root_cause", "Undetermined"), res.get("root_cause_confidence", 0.0), sev), unsafe_allow_html=True)
+        with res_col:
+            st.markdown(draw_resolution_card(res.get("resolution", "No solution mapped")), unsafe_allow_html=True)
+
+        # -------------------------------------------------------------------------
+        # SECTION 2: GOVERNANCE & TECHNICIAN-IN-THE-LOOP (TITL) WORKBENCH
+        # -------------------------------------------------------------------------
+        st.markdown("<h3>🛡️ Governance & Safety Dispatch</h3>", unsafe_allow_html=True)
+        st.markdown(draw_escalation_card(escalated, "System classification confidence score fell below acceptable threshold (< 70%)" if confidence_val < 0.70 else "Target category classified as 'unknown'"), unsafe_allow_html=True)
+
+        st.markdown("<h3>👨‍🔧 Technician-in-the-Loop (TITL) Workbench</h3>", unsafe_allow_html=True)
+        
+        tech_col1, tech_col2 = st.columns([2, 1])
+        with tech_col1:
+            selected_tech = st.selectbox(
+                "Certified Diagnostic Operator",
+                [
+                    "TECH-8821 — Hemanth N (Lead Diagnostic Engineer)",
+                    "TECH-4092 — Ananya R (EV Telematics Specialist)",
+                    "TECH-3108 — Vikram S (Field Workshop Supervisor)"
+                ],
+                key="tech_operator_select"
+            )
+        with tech_col2:
+            cert_badge = '<div style="margin-top:28px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#34d399; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; text-align:center;">🛡️ ISO 26262 Certified</div>'
+            st.markdown(cert_badge, unsafe_allow_html=True)
+
+        current_action = st.session_state.get("technician_action")
+        
+        if current_action:
+            action_type = current_action.get("type")
+            action_msg = current_action.get("message")
+            action_tech = current_action.get("tech")
+            action_time = current_action.get("time")
+            
+            if action_type == "APPROVED_OTA":
+                banner_color = "#10B981"
+                banner_bg = "rgba(16, 185, 129, 0.1)"
+                banner_border = "#10B981"
+                banner_icon = "✅"
+                banner_title = "OTA Remediation Broadcast Authorized"
+            elif action_type == "OVERRIDE":
+                banner_color = "#F59E0B"
+                banner_bg = "rgba(245, 158, 11, 0.1)"
+                banner_border = "#F59E0B"
+                banner_icon = "✏️"
+                banner_title = "Manual Diagnosis Override Logged"
+            elif action_type == "WORKSHOP":
+                banner_color = "#3B82F6"
+                banner_bg = "rgba(59, 130, 246, 0.1)"
+                banner_border = "#3B82F6"
+                banner_icon = "🚗"
+                banner_title = "Workshop Service Order Dispatched"
+            else:
+                banner_color = "#EF4444"
+                banner_bg = "rgba(239, 68, 68, 0.1)"
+                banner_border = "#EF4444"
+                banner_icon = "🚫"
+                banner_title = "Diagnostic Action Halted"
+
+            action_html = f"""
+            <div style="background:{banner_bg}; border:1.5px solid {banner_border}; border-radius:10px; padding:16px; margin-bottom:18px;">
+                <div style="font-size:14px; font-weight:800; color:{banner_color}; display:flex; align-items:center; gap:8px;">
+                    <span>{banner_icon}</span> {banner_title}
+                </div>
+                <div style="font-size:13px; color:#E2E8F0; margin-top:6px; line-height:1.4;">
+                    {action_msg}
+                </div>
+                <div style="font-size:11px; color:#94A3B8; margin-top:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px; display:flex; justify-content:space-between;">
+                    <span>Operator: <strong style="color:#C7D2FE;">{action_tech}</strong></span>
+                    <span>Timestamp: <strong style="color:#C7D2FE;">{action_time}</strong></span>
+                </div>
             </div>
             """
-            st.markdown(clean_html(flow_html), unsafe_allow_html=True)
-
-            st.markdown(draw_root_cause_card(res.get("root_cause", "Undetermined"), res.get("root_cause_confidence", 0.0), sev), unsafe_allow_html=True)
-            st.markdown(draw_resolution_card(res.get("resolution", "No solution mapped")), unsafe_allow_html=True)
+            st.markdown(clean_html(action_html), unsafe_allow_html=True)
             
+            if st.button("🔄 Reset Technician Review State", key="btn_reset_tech_action"):
+                st.session_state.technician_action = None
+                st.rerun()
+
+        else:
+            if not escalated:
+                st.markdown(f"""
+                <div style="background:rgba(30, 41, 59, 0.25); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:16px; margin-bottom:15px;">
+                    <div style="font-size:13px; color:#94A3B8; margin-bottom:4px;">
+                        The AI diagnostic engine has synthesized a high-confidence resolution (<strong style="color:#10B981;">{confidence_pct}%</strong>). Under safety governance, authorize Over-The-Air command dispatch to vehicle ECU or append technician notes.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                btn_c1, btn_c2, btn_c3 = st.columns([1.5, 1.2, 1.2])
+                with btn_c1:
+                    if st.button("🔐 Authorize & Broadcast OTA Fix", key="btn_auth_ota", use_container_width=True):
+                        now_str = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                        tech_tag = selected_tech.split('—')[0].strip()
+                        st.session_state.technician_action = {
+                            "type": "APPROVED_OTA",
+                            "message": f"Over-The-Air telemetry command successfully encrypted and dispatched to vehicle VIN <strong>{st.session_state.vehicle_id_input}</strong>. ECU configuration reset verified.",
+                            "tech": tech_tag,
+                            "time": now_str
+                        }
+                        if "investigation_steps" in res and not any("Technician" in s for s in res["investigation_steps"]):
+                            res["investigation_steps"].append(f"👨‍🔧 Technician-in-the-Loop: Authorized OTA remediation for {st.session_state.vehicle_id_input} (Signed: {tech_tag})")
+                        st.rerun()
+                        
+                with btn_c2:
+                    with st.popover("✏️ Manual Override"):
+                        st.markdown("##### Override Root Cause / Remediation")
+                        custom_rc = st.text_input("Override Root Cause", value=res.get("root_cause", ""), key="input_override_rc")
+                        custom_notes = st.text_area("Technician Diagnostic Notes", placeholder="e.g. Verified harness pin connector resistance manually...", key="input_tech_notes")
+                        if st.button("Save & Commit Override", key="btn_commit_override"):
+                            now_str = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                            tech_tag = selected_tech.split('—')[0].strip()
+                            res["root_cause"] = custom_rc
+                            st.session_state.technician_action = {
+                                "type": "OVERRIDE",
+                                "message": f"Diagnostic root cause modified by technician to: <em>'{custom_rc}'</em>. Notes: {custom_notes if custom_notes else 'No additional remarks.'}",
+                                "tech": tech_tag,
+                                "time": now_str
+                            }
+                            if "investigation_steps" in res:
+                                res["investigation_steps"].append(f"👨‍🔧 Technician-in-the-Loop: Root cause overridden by {tech_tag}: '{custom_rc}'")
+                            st.rerun()
+
+                with btn_c3:
+                    if st.button("🚗 Route to In-Bay Workshop", key="btn_bay_route", use_container_width=True):
+                        now_str = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                        tech_tag = selected_tech.split('—')[0].strip()
+                        st.session_state.technician_action = {
+                            "type": "WORKSHOP",
+                            "message": f"Physical workshop inspection scheduled for Customer <strong>{st.session_state.customer_id_input}</strong> (VIN: {st.session_state.vehicle_id_input}). Dealership Bay Work Order #WO-{int(time.time())%100000} generated.",
+                            "tech": tech_tag,
+                            "time": now_str
+                        }
+                        if "investigation_steps" in res:
+                            res["investigation_steps"].append(f"👨‍🔧 Technician-in-the-Loop: Service bay appointment issued for physical inspection by {tech_tag}")
+                        st.rerun()
+
+            else:
+                st.markdown(f"""
+                <div style="background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.2); border-radius:10px; padding:16px; margin-bottom:15px;">
+                    <div style="font-size:13px; color:#FCA5A5; font-weight:600; margin-bottom:6px;">
+                        ⚠️ Autonomous Resolution Inhibited: Human-in-the-Loop Escalation Active
+                    </div>
+                    <div style="font-size:12px; color:#E2E8F0; line-height:1.4;">
+                        The AI diagnostic confidence ({confidence_pct}%) is below the 70% threshold or the fault category is unknown. Certified technician manual assessment is required:
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                esc_col1, esc_col2 = st.columns(2)
+                with esc_col1:
+                    tech_rc_input = st.text_input("Verified Root Cause (Manual Triage)", placeholder="Enter diagnosed root failure point...", key="esc_tech_rc")
+                    tech_notes_input = st.text_area("Technician Diagnostic Notes", placeholder="Provide technical notes for field service crew...", height=85, key="esc_tech_notes")
+                with esc_col2:
+                    st.markdown("<div style='margin-top:24px;'></div>", unsafe_allow_html=True)
+                    if st.button("🚗 Dispatch Priority Field Workshop Ticket", key="btn_dispatch_priority", use_container_width=True):
+                        now_str = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                        tech_tag = selected_tech.split('—')[0].strip()
+                        st.session_state.technician_action = {
+                            "type": "WORKSHOP",
+                            "message": f"Priority Tier-3 Workshop Ticket <strong>#WO-ESCALATE-{int(time.time())%100000}</strong> dispatched. Customer {st.session_state.customer_id_input} notified for in-person service appointment. Notes: {tech_notes_input if tech_notes_input else 'Standard multi-factor triage required.'}",
+                            "tech": tech_tag,
+                            "time": now_str
+                        }
+                        if "investigation_steps" in res:
+                            res["investigation_steps"].append(f"👨‍🔧 Technician Escalation: Priority workshop order created by {tech_tag}")
+                        st.rerun()
+                        
+                    if st.button("🛠️ Commit Root Cause & Close Case", key="btn_esc_commit_close", use_container_width=True):
+                        now_str = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
+                        tech_tag = selected_tech.split('—')[0].strip()
+                        if tech_rc_input.strip():
+                            res["root_cause"] = tech_rc_input.strip()
+                        st.session_state.technician_action = {
+                            "type": "OVERRIDE",
+                            "message": f"Escalated case manually validated and resolved by technician. Assigned Root Cause: <em>'{res.get('root_cause')}'</em>. Notes: {tech_notes_input if tech_notes_input else 'Manual verification complete.'}",
+                            "tech": tech_tag,
+                            "time": now_str
+                        }
+                        if "investigation_steps" in res:
+                            res["investigation_steps"].append(f"👨‍🔧 Technician Escalation: Resolved and closed with manual root cause by {tech_tag}")
+                        st.rerun()
+
+        # -------------------------------------------------------------------------
+        # SECTION 3: BALANCED TWO-COLUMN OPERATIONAL DEEP-DIVE
+        # -------------------------------------------------------------------------
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
             # Evidence catalog
-            st.markdown("<h3>📋 System Evidence Trace</h3>", unsafe_allow_html=True)
+            st.markdown("<h3>📋 Verified Evidence Trace</h3>", unsafe_allow_html=True)
             evidence = res.get("evidence_used", [])
             if evidence:
                 evidence_html = "<div style='background:rgba(30, 41, 59, 0.15);border:1px solid rgba(255,255,255,0.04);border-radius:10px;padding:18px;margin-bottom:20px;'>"
@@ -847,47 +1055,34 @@ with tabs[0]:
                 st.markdown(evidence_html, unsafe_allow_html=True)
             else:
                 st.info("No primary evidence elements captured during this execution cycle.")
-                
-            # Governance Escalation Section
-            st.markdown("<h3>🛡️ Governance & Safety Dispatch</h3>", unsafe_allow_html=True)
-            escalate_flag = False
-            escalate_reason = ""
-            if res.get("root_cause_confidence", 0) < 0.70:
-                escalate_flag = True
-                escalate_reason = "System classification confidence score fell below acceptable threshold (< 70%)"
-            elif res.get("issue_category") == "unknown":
-                escalate_flag = True
-                escalate_reason = "Target category classified as 'unknown'"
-                
-            st.markdown(draw_escalation_card(escalate_flag, escalate_reason), unsafe_allow_html=True)
-            
+
             # Sub-agent state viewer metrics
             st.markdown("<h3>🧠 Active Sub-Agent Database Inspector</h3>", unsafe_allow_html=True)
-            sub1, sub2, sub3, sub4 = st.columns(4)
+            sub1, sub2 = st.columns(2)
             with sub1:
                 with st.expander("👤 CRM Registry", expanded=False):
                     st.json(res.get("crm_data", {}))
             with sub2:
                 with st.expander("📡 Telematics ECU", expanded=False):
                     st.json(res.get("telematics_data", {}))
+            sub3, sub4 = st.columns(2)
             with sub3:
                 with st.expander("💳 Subscriptions", expanded=False):
                     if res.get("subscription_status"):
-                        st.info(f"Status: {res.get('subscription_status')}")
+                        st.info(f"Status: {res.get('subscription_status').upper()}")
                     else:
-                        st.warning("Not queried")
+                        st.warning("Not queried (Bypassed)")
             with sub4:
                 with st.expander("📚 Knowledge KB", expanded=False):
                     st.text_area("RAG Reference", value=res.get("kb_context", ""), height=150, disabled=True, key="kb_area_view")
-                    
-        with out_col2:
-            st.markdown("<h3>🤖 Diagnostic Agent Pipeline</h3>", unsafe_allow_html=True)
+
+        with col_right:
+            st.markdown("<h3>🤖 Sub-Agent Execution Pipeline</h3>", unsafe_allow_html=True)
             
-            # Draw status details for each Agent
             st.markdown(draw_agent_status("Intent & Planner Classifier", "COMPLETED", f"Intent: {res.get('issue_category', 'unknown').upper()}", "🎯"), unsafe_allow_html=True)
             
             crm_s = "COMPLETED" if res.get("crm_data") else "SKIPPED"
-            crm_d = f"Retrieved record for {res.get('crm_data', {}).get('name', 'N/A')}" if res.get("crm_data") else "Bypassed by coordinator decision"
+            crm_d = f"Record for {res.get('crm_data', {}).get('name', 'N/A')}" if res.get("crm_data") else "Bypassed by planner decision"
             st.markdown(draw_agent_status("CRM History Profiler", crm_s, crm_d, "👤"), unsafe_allow_html=True)
             
             tele_s = "COMPLETED" if res.get("telematics_data") else "SKIPPED"
@@ -895,27 +1090,25 @@ with tabs[0]:
             st.markdown(draw_agent_status("Telematics Diagnostics", tele_s, tele_d, "📡"), unsafe_allow_html=True)
             
             sub_s = "COMPLETED" if res.get("subscription_status") else "SKIPPED"
-            sub_d = f"Status validation: {res.get('subscription_status')}" if res.get("subscription_status") else "Subscription validation bypassed"
+            sub_d = f"Status: {res.get('subscription_status', '').upper()}" if res.get("subscription_status") else "Subscription validation bypassed"
             st.markdown(draw_agent_status("Subscription Verification", sub_s, sub_d, "💳"), unsafe_allow_html=True)
             
             kb_s = "COMPLETED" if res.get("kb_context") else "SKIPPED"
             kb_d = "Retrieved RAG resolution blueprints" if res.get("kb_context") else "RAG system bypassed"
             st.markdown(draw_agent_status("Knowledge Base RAG Searcher", kb_s, kb_d, "📚"), unsafe_allow_html=True)
             
-            rc_s = "COMPLETED" if res.get("root_cause") else "SKIPPED"
-            rc_d = "Compiled root failure point"
-            st.markdown(draw_agent_status("Root Cause Analyst Node", rc_s, rc_d, "🧠"), unsafe_allow_html=True)
-            
-            resol_s = "COMPLETED" if res.get("resolution") else "SKIPPED"
-            resol_d = "Composed final repair procedure"
-            st.markdown(draw_agent_status("Actionable Resolution Node", resol_s, resol_d, "🔧"), unsafe_allow_html=True)
-            
             # Stepper Timeline View
-            st.markdown("<h3>🕒 Diagnostics Flow Trace</h3>", unsafe_allow_html=True)
+            st.markdown("<h3>🕒 Chronological Diagnostics Flow Trace</h3>", unsafe_allow_html=True)
             st.markdown(draw_timeline(res.get("investigation_steps", [])), unsafe_allow_html=True)
-            
-            with st.expander("🛠 View Orchestrator Log Frame"):
-                st.json(res)
+
+        # -------------------------------------------------------------------------
+        # SECTION 4: TECHNICAL DEEP-DIVE EXPANDERS
+        # -------------------------------------------------------------------------
+        with st.expander("🛣️ Visual Workflow DAG Architecture & Execution Path", expanded=False):
+            st.markdown(clean_html(flow_html), unsafe_allow_html=True)
+
+        with st.expander("🛠 View Orchestrator Raw State Frame", expanded=False):
+            st.json(res)
     else:
         st.divider()
         st.markdown("""
@@ -1072,4 +1265,5 @@ with tabs[2]:
     3. **Parallel Agents Polling**: LangGraph executes sub-agents which connect to real-world resources (CRM Databases, eSIM Status transceivers, Subscription registries).
     4. **Knowledge Retrieval (RAG)**: Connects with a vector database holding product manuals, technical bulletins, and FAQs to supply resolving documentation context.
     5. **Synthesis Node**: The **Root Cause Agent** and **Resolution Agent** compile all evidence logs and produce a cohesive analysis output, determining whether the problem can be addressed autonomously or requires human escalations.
+    6. **Technician-in-the-Loop (TITL) Governance**: A certified operator review workbench compliant with ISO 26262 functional safety, providing explicit technician sign-off for Over-The-Air (OTA) actuators, manual root cause overrides, or physical workshop dispatches.
     """)

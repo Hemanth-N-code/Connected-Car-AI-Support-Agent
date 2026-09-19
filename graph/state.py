@@ -1,7 +1,7 @@
 from typing_extensions import TypedDict
 
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
 
     customer_query: str
 
@@ -28,3 +28,7 @@ class AgentState(TypedDict):
     evidence_used: list
 
     investigation_steps: list
+
+    technician_status: str
+    technician_notes: str
+    technician_action: str
